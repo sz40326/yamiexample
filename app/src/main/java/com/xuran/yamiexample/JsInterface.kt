@@ -36,6 +36,13 @@ internal class JsInterface private constructor() {
         }
     }
 
+    @JavascriptInterface
+    fun toast(str: String) {
+        activityRef.get()?.let { activity ->
+            Toast.makeText(getApplicationContext(), str, Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun getApplicationContext() =
         activityRef.get()?.applicationContext ?: android.app.Application()
 }
