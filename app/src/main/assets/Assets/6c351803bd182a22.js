@@ -7,18 +7,124 @@
 
 注意：本指令仅适用于徐然安卓壳。
 
-@option emitCommand {"退出APP"}
+@option emitCommand {"退出APP","弹出提示","TapTap集成"}
 @alias API
 @desc 调用API
 
+@string contentString
+@alias 内容
+@cond emitCommand {"弹出提示"}
+
+
+@option emitCommandTapTap {"初始化","调用登录"}
+@alias TapTap操作
+@cond emitCommand {"TapTap集成"}
+
+
+@string TapTap_clientId
+@alias Client ID
+@desc 游戏 Client ID
+@cond emitCommandTapTap {"初始化"}
+
+@string TapTap_clientToken
+@alias Client Token
+@desc 游戏 Client Token
+@cond emitCommandTapTap {"初始化"}
+
+@option TapTap_region {0,1}
+@alias 区域 {CN, GLOBAL}
+@desc 游戏可玩区域: [CN]=国内 [GLOBAL]=海外
+@cond emitCommandTapTap {"初始化"}
+
+@string TapTap_channel
+@alias 分包渠道名称
+@desc 分包渠道即为上报数据时其中的 channel 字段信息，方便大家对数据进行拆分。
+@cond emitCommandTapTap {"初始化"}
+
+@string TapTap_gameVersion
+@alias 游戏版本号
+@default "1.0"
+@cond emitCommandTapTap {"初始化"}
+
+@boolean TapTap_autoIAPEventEnabled
+@alias 上报 GooglePlay
+@default false
+@desc 是否自动上报 GooglePlay 内购支付成功事件 仅 [TapTapRegion.GLOBAL] 生效
+@cond emitCommandTapTap {"初始化"}
+
+@boolean TapTap_overrideBuiltInParameters
+@alias 覆盖内置字段
+@default false
+@desc 自定义字段是否能覆盖内置字段
+@cond emitCommandTapTap {"初始化"}
+
+@string TapTap_oaidCert
+@alias OAID 证书
+@desc 用于上报 OAID 仅 [Region.CN] 生效
+@cond emitCommandTapTap {"初始化"}
+
+@boolean TapTap_enableLog
+@alias 开启 log
+@default false
+@desc 建议 Debug 开启，Release 关闭，默认关闭 log
+@cond emitCommandTapTap {"初始化"}
+
+
+
+@file TapTapLogin_success
+@filter event
+@alias 成功登录事件
+@desc
+回调本地变量：accessToken、avatar、email、name、openId、unionId
+
+@cond emitCommandTapTap {'调用登录'}
+
+@file TapTapLogin_failure
+@filter event
+@alias 失败登录事件
+@cond emitCommandTapTap {'调用登录'}
+
+@file TapTapLogin_cancel
+@filter event
+@alias 取消登录事件
+@cond emitCommandTapTap {'调用登录'}
+
 */
 /** 自定义指令脚本 */
-export default class CommandScript {
-    emitCommand;
+export default class Mobile_AndroidApi {
     EventFileCallBack;
+    contentString;
+    emitCommand;
+    emitCommandTapTap;
+    TapTap_clientId;
+    TapTap_clientToken;
+    TapTap_region;
+    TapTap_channel;
+    TapTap_gameVersion;
+    TapTap_autoIAPEventEnabled;
+    TapTap_overrideBuiltInParameters;
+    TapTap_oaidCert;
+    TapTap_enableLog;
+    TapTapLogin_success;
+    TapTapLogin_failure;
+    TapTapLogin_cancel;
     constructor() {
+        this.contentString = "";
         this.emitCommand = "";
+        this.emitCommandTapTap = "";
         this.EventFileCallBack = null;
+        this.TapTap_clientId = "";
+        this.TapTap_clientToken = "";
+        this.TapTap_region = 0;
+        this.TapTap_channel = "";
+        this.TapTap_gameVersion = "";
+        this.TapTap_autoIAPEventEnabled = false;
+        this.TapTap_overrideBuiltInParameters = false;
+        this.TapTap_oaidCert = "";
+        this.TapTap_enableLog = false;
+        this.TapTapLogin_success = "";
+        this.TapTapLogin_failure = "";
+        this.TapTapLogin_cancel = "";
     }
     checkEnv() {
         if (!window.JSApi) {
@@ -30,11 +136,40 @@ export default class CommandScript {
     call() {
         switch (this.emitCommand) {
             case "退出APP":
-                if (this.checkEnv()) {
+                if (this.checkEnv())
                     window.JSApi?.exitApp();
+                break;
+            case "弹出提示":
+                if (this.checkEnv())
+                    window.JSApi?.toast(this.contentString);
+                break;
+            case "TapTap集成":
+                if (!this.checkEnv())
+                    return;
+                {
+                    switch (this.emitCommandTapTap) {
+                        case "初始化":
+                            const config = {
+                                clientId: this.TapTap_clientId,
+                                clientToken: this.TapTap_clientToken,
+                                region: this.TapTap_region,
+                                channel: this.TapTap_channel,
+                                gameVersion: this.TapTap_gameVersion,
+                                autoIAPEventEnabled: this.TapTap_autoIAPEventEnabled,
+                                overrideBuiltInParameters: this.TapTap_overrideBuiltInParameters,
+                                oaidCert: this.TapTap_oaidCert,
+                                enableLog: this.TapTap_enableLog,
+                            };
+                            window.JSApi?.initTapTap(JSON.stringify(config));
+                            break;
+                        case "调用登录":
+                            if (this.checkEnv())
+                                window.JSApi?.loginTapTap(this.TapTapLogin_success, this.TapTapLogin_failure, this.TapTapLogin_cancel);
+                            break;
+                    }
                 }
                 break;
         }
     }
 }
-//# sourceMappingURL=%E7%A7%BB%E5%8A%A8%E7%AB%AF-API%E6%8C%87%E4%BB%A4.6c351803bd182a22.js.map
+//# sourceMappingURL=%E7%A7%BB%E5%8A%A8%E7%AB%AF-API.%E6%8C%87%E4%BB%A4.6c351803bd182a22.js.map

@@ -127,13 +127,12 @@ export default class Mobile_OperatingWheel {
         }
     };
     handleTouchEnd = (e) => {
-        const cahnged = e.changedTouches;
+        const changed = e.changedTouches;
         const target = this.getElem();
-        if (!target || !cahnged || !this.active)
+        if (!target || !changed || !this.active)
             return;
-        for (const touch of cahnged) {
-            if (this.isPointInRect({ x: touch.screenX, y: touch.screenY }, { ...target.transform }) ) {
-                console.log("xr", cahnged.length)
+        for (const touch of changed) {
+            if (this.isPointInRect({ x: touch.screenX, y: touch.screenY }, { ...target.transform })) {
                 this.isDragging = false;
                 const child = this.getChildElem();
                 if (child && child.parent)
