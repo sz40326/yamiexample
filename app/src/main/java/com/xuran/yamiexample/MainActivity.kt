@@ -1,5 +1,8 @@
 package com.xuran.yamiexample
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
 import android.content.pm.ActivityInfo
 import android.net.http.SslError
 import android.os.Build
@@ -9,12 +12,12 @@ import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.webkit.SslErrorHandler
-import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import java.lang.reflect.InvocationTargetException
@@ -93,6 +96,16 @@ class MainActivity : ComponentActivity() {
             ) {
                 handler.proceed() // 接受证书
             }
+        }
+        if (intent.getBooleanExtra("from_notification", false)) {
+            Toast.makeText(this, "从通知跳转而来", Toast.LENGTH_SHORT).show()
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel =
+                NotificationChannel(CHANNEL_ID, CHANNEL_ID, NotificationManager.IMPORTANCE_HIGH)
+            (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(
+                channel
+            )
         }
     }
 

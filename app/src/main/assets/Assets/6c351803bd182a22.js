@@ -5,15 +5,21 @@
 @link https://space.bilibili.com/291565199
 @desc
 
-注意：本指令仅适用于徐然安卓壳。
+本指令包括一些常用安卓API、TapTap继承
 
-@option emitCommand {"退出APP","弹出提示","TapTap集成"}
+注意：本指令仅适用于徐然安卓壳，在其他壳下无法正常运行。
+
+@option emitCommand {"退出APP","弹出提示","弹出通知栏消息","TapTap集成"}
 @alias API
 @desc 调用API
 
+@string titleString
+@alias 标题
+@cond emitCommand {"弹出通知栏消息"}
+
 @string contentString
 @alias 内容
-@cond emitCommand {"弹出提示"}
+@cond emitCommand {"弹出提示","弹出通知栏消息"}
 
 
 @option emitCommandTapTap {"初始化","调用登录","调用更新","初始化成就","解锁成就"}
@@ -129,6 +135,7 @@
 /** 自定义指令脚本 */
 export default class Mobile_AndroidApi {
     EventFileCallBack;
+    titleString;
     contentString;
     emitCommand;
     emitCommandTapTap;
@@ -151,6 +158,7 @@ export default class Mobile_AndroidApi {
     TapTapAchievementUnlock_isStep;
     TapTapAchievementUnlock_stepValue;
     constructor() {
+        this.titleString = "";
         this.contentString = "";
         this.emitCommand = "";
         this.emitCommandTapTap = "";
@@ -190,6 +198,10 @@ export default class Mobile_AndroidApi {
             case "弹出提示":
                 if (this.checkEnv())
                     window.JSApi?.toast(this.contentString);
+                break;
+            case "弹出通知栏消息":
+                if (this.checkEnv())
+                    window.JSApi?.notifyApp(this.titleString, this.contentString);
                 break;
             case "TapTap集成":
                 if (!this.checkEnv())

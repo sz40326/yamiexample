@@ -1,10 +1,20 @@
 package com.xuran.yamiexample
 
 import android.app.Activity
+import android.Manifest
+import android.app.Notification
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.webkit.JavascriptInterface
 import android.webkit.ValueCallback
 import android.webkit.WebView
 import android.widget.Toast
+import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.taptap.sdk.achievement.TapAchievementCallback
 import com.taptap.sdk.achievement.TapTapAchievement
 import com.taptap.sdk.achievement.TapTapAchievementResult
@@ -22,7 +32,11 @@ import com.taptap.sdk.update.TapTapUpdate
 import com.taptap.sdk.update.TapTapUpdateCallback
 import org.json.JSONObject
 import java.lang.ref.WeakReference
+import kotlin.random.Random
 
+// Notification ID.
+private var NOTIFICATION_ID = 1001099
+const val CHANNEL_ID = "xuranchannel01"
 
 internal class JsInterface private constructor() {
     private var activityRef = WeakReference<Activity>(null)
@@ -56,6 +70,42 @@ internal class JsInterface private constructor() {
     fun toast(str: String) {
         activityRef.get()?.let { activity ->
             Toast.makeText(getApplicationContext(), str, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    @JavascriptInterface
+    fun notifyApp(title: String, content: String) {
+        activityRef.get()?.let {
+            if (ContextCompat.checkSelfPermission(
+                    getApplicationContext(), Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                ActivityCompat.requestPermissions(
+                    it, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1
+                )
+                Toast.makeText(getApplicationContext(), "当前无通知权限", Toast.LENGTH_SHORT).show()
+                return;
+            }
+            val notificationManager =
+                getApplicationContext().getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val intent = Intent(getApplicationContext(), MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            }
+            val pendingIntent = PendingIntent.getActivity(
+                getApplicationContext(),
+                System.currentTimeMillis().toInt(),
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            // 构建通知
+            val notification = NotificationCompat.Builder(getApplicationContext(), CHANNEL_ID)
+                .setSmallIcon(R.mipmap.ic_launcher) // 必须的小图标
+                .setContentTitle(title).setContentText(content).setContentIntent(pendingIntent)
+                .setAutoCancel(true) // 点击后自动移除通知
+                .build()
+            notificationManager.notify(NOTIFICATION_ID, notification)
+            NOTIFICATION_ID += 1
         }
     }
 
@@ -209,3 +259,4 @@ fun Activity.registerJsInterface(webView: WebView, name: String) {
         JsInterface.getInstance(), name
     )
 }
+
