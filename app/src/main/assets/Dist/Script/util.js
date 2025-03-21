@@ -1,24 +1,34 @@
 /** ******************************** 统计信息管理器 ******************************** */
 let Stats = new class StatsManager {
-    /** 是否在本地客户端上运行 */
-    isOnClient = !!window.process;
     /** 获取调试状态 */
     debug = !!window.process?.argv.includes('--debug-mode');
     /** 获取应用外壳 */
-    shell = window.process ? 'electron' : 'web';
-    /** 获取设备类型 */
-    get deviceType() {
-        return /ipad|iphone|android/i.test(navigator.userAgent) ? 'mobile' : 'pc';
+    shell = window.process ? 'electron' : 'browser';
+    /**
+     * 判断是不是Windows平台
+     * @returns 是否运行在Windows平台
+     */
+    isWindows() {
+        return navigator.userAgentData
+            ? navigator.userAgentData.platform === 'Windows'
+            : navigator.platform.indexOf('Win') === 0;
     }
     /**
-     * 判断是不是Mac平台
-     * @returns 是否运行在Mac平台
+     * 判断是不是MacOS平台
+     * @returns 是否运行在MacOS平台
      */
     isMacOS() {
-        if (navigator.userAgentData) {
-            return navigator.userAgentData.platform === 'macOS';
-        }
-        return navigator.platform.indexOf('Mac') === 0;
+        return navigator.userAgentData
+            ? navigator.userAgentData.platform === 'macOS'
+            : navigator.platform.indexOf('Mac') === 0;
+    }
+    /**
+     * 判断是不是移动平台
+     * @returns 是否运行在移动平台
+     */
+    isMobile() {
+        return navigator.userAgentData?.mobile ??
+            /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     }
 };
 // 空对象
@@ -459,4 +469,8 @@ window.on('contextmenu', function (event) {
 window.on('dragstart', function (event) {
     event.preventDefault();
 });
+// 本地运行游戏且非100%缩放时，自动调整设备像素比率
+if (Stats.shell === 'electron' && window.devicePixelRatio !== 1) {
+    require('electron').ipcRenderer.send('set-device-pixel-ratio', window.devicePixelRatio);
+}
 //# sourceMappingURL=util.js.map

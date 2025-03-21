@@ -22,32 +22,15 @@ let Game = new class GameManager {
     async initialize() {
         // 注册退出事件
         Game.registerExitEvent();
-        // 加载配置和全局数据文件
-        await Data.loadConfig();
-        await Promise.all([
-            Data.loadTSConfig(),
-            Data.loadSaveDirPath(),
-        ]);
-        await Data.loadGlobalData();
-        // 创建GL上下文
-        GLBuilder.initialize();
-        // 优先初始化以下内容
-        await Promise.all([
-            Stage.initialize(),
-            Data.loadMeta(),
-            Time.initialize(),
-            Game.loop(Time.timestamp),
-        ]);
-        // 加载数据和默认字体
-        await Promise.all([
-            Data.initialize(),
-            Printer.initialize(),
-        ]);
-        // 设置更新器(按顺序更新每一帧)
-        Game.updaters = new UpdaterList(Callback, Input, Timer, Scene, EventManager, UI, AudioManager, CacheList, Callback);
-        // 设置渲染器(按顺序渲染每一帧)
-        Game.renderers = new RendererList(OffscreenStart, Scene, OffscreenEnd, UI);
+        // 初始化数据内容
+        await Data.initialize();
         // 初始化组件对象
+        Command.initialize();
+        EventManager.initialize();
+        PluginManager.initialize();
+        Time.initialize();
+        WebGL.initialize();
+        Stage.initialize();
         Local.initialize();
         Input.initialize();
         Mouse.initialize();
@@ -65,11 +48,18 @@ let Game = new class GameManager {
         Team.initialize();
         Easing.initialize();
         Variable.initialize();
-        Command.initialize();
         AudioManager.initialize();
-        EventManager.initialize();
-        PluginManager.initialize();
         MessageReporter.initialize();
+        // 设置更新器(按顺序更新每一帧)
+        Game.updaters = new UpdaterList(Callback, Loader, Input, Timer, Scene, EventManager, UI, AudioManager, CacheList, Callback);
+        // 设置渲染器(按顺序渲染每一帧)
+        Game.renderers = new RendererList(OffscreenStart, Scene, OffscreenEnd, UI);
+        // 开始游戏循环
+        Game.loop(0);
+        // 加载字体
+        await Printer.initialize();
+        // 预加载文件
+        await Loader.preload();
         // 触发ready事件
         Game.emit('ready');
         // 开始游戏
@@ -84,15 +74,6 @@ let Game = new class GameManager {
         requestAnimationFrame(Game.loop);
         // 更新时间
         Time.update(timestamp);
-        // 防止Firefox隐藏时运行
-        if (document.hidden) {
-            return;
-        }
-        // 如果正在同步加载数据
-        // 渲染加载进度条并返回
-        if (Loader.updateLoadingProgress()) {
-            return Loader.renderLoadingProgress();
-        }
         // 更新数据
         Game.update();
         // 渲染图形
@@ -137,6 +118,7 @@ let Game = new class GameManager {
     }
     /** 开始游戏 */
     start() {
+        Command.custom.emit('autorun');
         EventManager.emit('startup');
         EventManager.emit('autorun');
     }
@@ -193,19 +175,21 @@ let Game = new class GameManager {
      * 注册退出事件
      */
     registerExitEvent() {
-        if (Stats.isOnClient) {
-            // Electron本地模式
-            const { ipcRenderer } = require('electron');
-            ipcRenderer.on('before-close-window', () => {
-                Game.emit('quit');
-                ipcRenderer.send('force-close-window');
-            });
-        }
-        else {
-            // Web模式(刷新页面也会触发)
-            window.on('beforeunload', event => {
-                Game.emit('quit');
-            });
+        switch (Stats.shell) {
+            case 'electron': {
+                const { ipcRenderer } = require('electron');
+                ipcRenderer.on('before-close-window', () => {
+                    Game.emit('quit');
+                    ipcRenderer.send('force-close-window');
+                });
+                break;
+            }
+            case 'browser':
+                // 刷新页面也会触发
+                window.on('beforeunload', event => {
+                    Game.emit('quit');
+                });
+                break;
         }
     }
     /** 开关游戏信息显示面板 */

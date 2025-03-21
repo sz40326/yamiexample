@@ -5,7 +5,7 @@ let Stage = new class StageManager {
     /** 分辨率高度 */
     height = 0;
     /** 初始化舞台 */
-    async initialize() {
+    initialize() {
         // 设置网页标题
         const title = document.createElement('title');
         title.textContent = Data.config.window.title;
@@ -17,24 +17,10 @@ let Stage = new class StageManager {
         // 设置初始分辨率
         this.width = Data.globalData.canvasWidth;
         this.height = Data.globalData.canvasHeight;
-        // 调整窗口大小
-        this.resizeWindow();
         // 调整大小
         this.resize();
         // 侦听事件
         window.on('resize', this.resize);
-    }
-    /**
-     * 调整窗口大小
-     */
-    resizeWindow() {
-        // 本地运行游戏且非100%缩放时，自动调整设备像素比率
-        if (Stats.shell === 'electron' && window.devicePixelRatio !== 1) {
-            // MacOS不像Windows一样锁定窗口最大化
-            if (!Stats.isMacOS() || Data.config.window.display === 'windowed') {
-                require('electron').ipcRenderer.send('set-device-pixel-ratio', window.devicePixelRatio);
-            }
-        }
     }
     /**
      * 设置分辨率
@@ -116,12 +102,12 @@ let Stage = new class StageManager {
     resize() {
         const { width, height } = Stage;
         GL.resize(width, height);
-        switch (Stats.deviceType) {
-            case 'pc':
+        switch (Stats.isMobile()) {
+            case false:
                 // 个人电脑模式
                 Stage.scaleCanvas(width, height);
                 break;
-            case 'mobile':
+            case true:
                 // 移动设备模式：如果最小分辨率宽高比和窗口宽高比同时>=1或同时<1，则不用旋转
                 if ((width >= height) === (window.innerWidth >= window.innerHeight)) {
                     // 不旋转

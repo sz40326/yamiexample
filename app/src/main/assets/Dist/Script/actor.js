@@ -1685,8 +1685,8 @@ class ActorCollider {
             if (distSquared < distMin ** 2) {
                 const dist = Math.sqrt(distSquared);
                 const offset = distMin - dist;
-                const offsetX = offset / distMin * distX;
-                const offsetY = offset / distMin * distY;
+                const offsetX = offset / dist * distX;
+                const offsetY = offset / dist * distY;
                 // 体重比值0.5~2映射为0~1的推力
                 if (ratio === undefined) {
                     const sWeight = sCollider.weight;

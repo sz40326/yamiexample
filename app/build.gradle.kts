@@ -52,6 +52,7 @@ dependencies {
     implementation("com.taptap.sdk:tap-core:4.5.4")
     implementation("com.taptap.sdk:tap-kit:4.5.4")
     implementation("com.taptap.sdk:tap-login:4.5.4")
+    implementation("com.taptap.sdk:tap-update:4.5.4")
     implementation("com.taptap.sdk:tap-compliance:4.5.4")
     implementation("com.taptap.sdk:tap-achievement:4.5.4")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.4.1")

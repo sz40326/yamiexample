@@ -16,7 +16,7 @@
 @cond emitCommand {"弹出提示"}
 
 
-@option emitCommandTapTap {"初始化","调用登录"}
+@option emitCommandTapTap {"初始化","调用登录","调用更新"}
 @alias TapTap操作
 @cond emitCommand {"TapTap集成"}
 
@@ -89,6 +89,12 @@
 @alias 取消登录事件
 @cond emitCommandTapTap {'调用登录'}
 
+
+@file TapTapUpdate_cancel
+@filter event
+@alias 取消更新事件
+@cond emitCommandTapTap {'调用更新'}
+
 */
 /** 自定义指令脚本 */
 export default class Mobile_AndroidApi {
@@ -108,6 +114,7 @@ export default class Mobile_AndroidApi {
     TapTapLogin_success;
     TapTapLogin_failure;
     TapTapLogin_cancel;
+    TapTapUpdate_cancel;
     constructor() {
         this.contentString = "";
         this.emitCommand = "";
@@ -125,6 +132,7 @@ export default class Mobile_AndroidApi {
         this.TapTapLogin_success = "";
         this.TapTapLogin_failure = "";
         this.TapTapLogin_cancel = "";
+        this.TapTapUpdate_cancel = "";
     }
     checkEnv() {
         if (!window.JSApi) {
@@ -165,6 +173,10 @@ export default class Mobile_AndroidApi {
                         case "调用登录":
                             if (this.checkEnv())
                                 window.JSApi?.loginTapTap(this.TapTapLogin_success, this.TapTapLogin_failure, this.TapTapLogin_cancel);
+                            break;
+                        case "调用更新":
+                            if (this.checkEnv())
+                                window.JSApi?.updateTapTap(this.TapTapUpdate_cancel);
                             break;
                     }
                 }

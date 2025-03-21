@@ -62,26 +62,34 @@ let Data = new class DataManager {
     async initialize() {
         // 侦听窗口关闭前事件
         Game.on('quit', () => {
-            Data.saveGlobalData();
+            this.saveGlobalData();
         });
+        // 加载配置文件和存档路径
+        await this.loadConfig();
+        await Promise.all([
+            this.loadTSConfig(),
+            this.loadSaveDirPath(),
+        ]);
         // 加载数据文件
         await Promise.all([
-            // 优先加载属性和枚举用于编译事件
+            this.loadMeta(),
             this.loadFile('attribute'),
             this.loadFile('enumeration'),
             this.loadFile('localization'),
-            this.loadObjects(),
-            this.loadScripts(),
             this.loadFile('easings'),
             this.loadFile('teams'),
             this.loadFile('autotiles'),
             this.loadFile('variables'),
             this.loadFile('plugins'),
             this.loadFile('commands'),
-        ]).then(() => {
-            this.createAutotileMap();
-            this.createEasingMap();
-        });
+        ]);
+        await Promise.all([
+            this.loadScripts(),
+            this.loadObjects(),
+            this.loadGlobalData(),
+        ]);
+        this.createAutotileMap();
+        this.createEasingMap();
     }
     /**
      * 加载文件的元数据清单
@@ -91,7 +99,6 @@ let Data = new class DataManager {
         return Loader.get({
             path: path,
             type: 'json',
-            sync: true,
         }).then(data => {
             if (!data) {
                 throw new SyntaxError(path);
@@ -100,7 +107,9 @@ let Data = new class DataManager {
         }).then(manifest => {
             // 创建GUID->元数据映射表
             const guidMap = {};
+            const pathMap = {};
             Object.defineProperty(manifest, 'guidMap', { value: guidMap });
+            Object.defineProperty(manifest, 'pathMap', { value: pathMap });
             for (const [key, group] of Object.entries(manifest)) {
                 switch (key) {
                     case 'images':
@@ -113,6 +122,7 @@ let Data = new class DataManager {
                         for (const meta of group) {
                             meta.guid = this.parseGUID(meta);
                             guidMap[meta.guid] = meta;
+                            pathMap[meta.path] = meta;
                         }
                         break;
                     default:
@@ -169,7 +179,6 @@ let Data = new class DataManager {
             const fileDescriptor = {
                 path: '',
                 type: 'json',
-                sync: true,
             };
             const table = [
                 ['scenes', {}, null],
@@ -594,7 +603,6 @@ let Data = new class DataManager {
         const promise = Loader.get({
             path: `Data/${filename}.json`,
             type: 'json',
-            sync: true,
         }).then(data => {
             this[filename] = data;
         });
@@ -723,7 +731,7 @@ let Data = new class DataManager {
                 ]);
                 break;
             }
-            case 'web': {
+            case 'browser': {
                 const metaKey = `save${suffix}.meta`;
                 const dataKey = `save${suffix}.save`;
                 await Promise.all([
@@ -756,7 +764,7 @@ let Data = new class DataManager {
                     return;
                 }
                 break;
-            case 'web': {
+            case 'browser': {
                 const key = `save${suffix}.save`;
                 data = await IDB.getItem(key);
                 break;
@@ -801,7 +809,7 @@ let Data = new class DataManager {
                 }
                 break;
             }
-            case 'web':
+            case 'browser':
                 for (const key of await IDB.getKeys()) {
                     if (metaname.test(key)) {
                         filenames.push(key);
@@ -848,7 +856,7 @@ let Data = new class DataManager {
                 ]);
                 break;
             }
-            case 'web': {
+            case 'browser': {
                 const metaKey = `save${suffix}.meta`;
                 const dataKey = `save${suffix}.save`;
                 await Promise.all([
@@ -889,7 +897,7 @@ let Data = new class DataManager {
                 await Data.writeFile(savePath, json);
                 break;
             }
-            case 'web': {
+            case 'browser': {
                 const key = 'global.save';
                 await IDB.setItem(key, data);
                 break;
@@ -913,7 +921,7 @@ let Data = new class DataManager {
                     // 不存在全局存档
                 }
                 break;
-            case 'web':
+            case 'browser':
                 this.globalData = await IDB.getItem('global.save');
                 break;
         }
@@ -959,7 +967,6 @@ let Data = new class DataManager {
         this.config = await Loader.get({
             path: 'Data/config.json',
             type: 'json',
-            sync: true,
         });
     }
     /**
@@ -970,13 +977,12 @@ let Data = new class DataManager {
             const tsconfig = await Loader.get({
                 path: 'tsconfig.json',
                 type: 'text',
-                sync: true,
             });
             const match = tsconfig.match(/"outDir"\s*:\s*"(.*?)"/);
             if (!match) {
                 throw new Error('Unable to get "outDir" from "tsconfig.json".');
             }
-            this.tsOutDir = require('path').normalize(match[1]);
+            this.tsOutDir = match[1];
             if (!/\/$/.test(this.tsOutDir)) {
                 this.tsOutDir += '/';
             }
@@ -984,10 +990,9 @@ let Data = new class DataManager {
     }
     /**
      * 加载存档目录路径(Node.js)
-     * @returns 存档目录
      */
     async loadSaveDirPath() {
-        if (Stats.isOnClient) {
+        if (Stats.shell === 'electron') {
             const { location, subdir } = this.config.save;
             if (location === 'local') {
                 this.saveDir = __dirname;

@@ -265,9 +265,9 @@ let ScaleEasing;
 let OpacityEasing;
 let Duration = 0;
 const Fonts = new Array(6).fill(null);
-const FontTex = new Texture();
 const Numbers = new Uint8Array(16);
 const KEY = Symbol('FLOATINGS');
+let FontTex;
 // 浮动数字缓存
 const Caches = [];
 const CacheMax = 500;
@@ -329,6 +329,8 @@ class DamageNumber {
             scene.renderers.push(floatings);
             scene[KEY] = floatings;
         });
+        // 创建字体纹理
+        FontTex = new Texture();
         // 创建图像列表
         const images = [
             this.numberImage0,

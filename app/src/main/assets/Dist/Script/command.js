@@ -78,25 +78,23 @@ let Command = new class CommandCompiler {
     returnKey = Symbol('RETURN_VALUE');
     /** 继承事件指令列表的键 */
     inheritKey = Symbol("INHERITED_COMMANDS");
-    /** 初始化指令编译器 */
+    /** 自定义指令脚本管理器 */
+    custom;
+    /** 初始化自定义指令 */
     initialize() {
         const commands = Data.commands;
-        delete this.initialize;
-        delete Data.commands;
         const parameters = {};
         // 给自定义指令添加空的参数表
         for (const command of commands) {
             command.parameters = parameters;
         }
         // 创建自定义指令的脚本管理器
-        const manager = ScriptManager.create({}, commands);
+        this.custom = ScriptManager.create({}, commands);
         // 获取脚本实例，以GUID作为键进行注册
-        for (const instance of manager.instances) {
+        for (const instance of this.custom.instances) {
             const guid = instance.constructor.guid;
             this.scriptMap[guid] = instance;
         }
-        // 发送自动执行事件
-        manager.emit('autorun');
     }
     /**
      * 编译指令
@@ -440,6 +438,13 @@ let Command = new class CommandCompiler {
         };
     }();
     /**
+     * 筛选出有效的场景对象
+     * @returns 有效对象(如果有)
+     */
+    filterValidObject(object) {
+        return object?.destroyed === false ? object : undefined;
+    }
+    /**
      * 编译角色对象
      * @param actor 角色访问器
      * @returns 角色访问器函数
@@ -447,15 +452,15 @@ let Command = new class CommandCompiler {
     compileActor(actor) {
         switch (actor.type) {
             case 'trigger':
-                return () => CurrentEvent.triggerActor;
+                return () => Command.filterValidObject(CurrentEvent.triggerActor);
             case 'caster':
-                return () => CurrentEvent.casterActor;
+                return () => Command.filterValidObject(CurrentEvent.casterActor);
             case 'latest':
-                return () => Actor.latest;
+                return () => Command.filterValidObject(Actor.latest);
             case 'target':
-                return () => CurrentEvent.targetActor;
+                return () => Command.filterValidObject(CurrentEvent.targetActor);
             case 'player':
-                return () => Party.player ?? undefined;
+                return () => Command.filterValidObject(Party.player ?? undefined);
             case 'member': {
                 const getMemberId = Command.compileNumber(actor.memberId);
                 return () => Party.members[getMemberId()];
@@ -470,8 +475,10 @@ let Command = new class CommandCompiler {
                     return Scene.entity.get(presetId);
                 };
             }
-            case 'variable':
-                return Command.compileVariable(actor.variable, Attribute.ACTOR_GET);
+            case 'variable': {
+                const getActor = Command.compileVariable(actor.variable, Attribute.ACTOR_GET);
+                return () => Command.filterValidObject(getActor());
+            }
         }
     }
     /**
@@ -689,12 +696,14 @@ let Command = new class CommandCompiler {
             case 'trigger':
                 return () => {
                     const object = CurrentEvent.triggerObject;
-                    return object instanceof Trigger ? object : undefined;
+                    return Command.filterValidObject(object instanceof Trigger ? object : undefined);
                 };
             case 'latest':
-                return () => Trigger.latest;
-            case 'variable':
-                return Command.compileVariable(trigger.variable, Attribute.TRIGGER_GET);
+                return () => Command.filterValidObject(Trigger.latest);
+            case 'variable': {
+                const getTrigger = Command.compileVariable(trigger.variable, Attribute.TRIGGER_GET);
+                return () => Command.filterValidObject(getTrigger());
+            }
         }
     }
     /**
@@ -705,17 +714,19 @@ let Command = new class CommandCompiler {
     compileLight(light) {
         switch (light.type) {
             case 'trigger':
-                return () => CurrentEvent.triggerLight;
+                return () => Command.filterValidObject(CurrentEvent.triggerLight);
             case 'latest':
-                return () => SceneLight.latest;
+                return () => Command.filterValidObject(SceneLight.latest);
             case 'by-id': {
                 const { presetId } = light;
                 return () => {
                     return Scene.entity.get(presetId);
                 };
             }
-            case 'variable':
-                return Command.compileVariable(light.variable, Attribute.LIGHT_GET);
+            case 'variable': {
+                const getLight = Command.compileVariable(light.variable, Attribute.LIGHT_GET);
+                return Command.filterValidObject(getLight());
+            }
         }
     }
     /**
@@ -726,7 +737,7 @@ let Command = new class CommandCompiler {
     compileRegion(region) {
         switch (region.type) {
             case 'trigger':
-                return () => CurrentEvent.triggerRegion;
+                return () => Command.filterValidObject(CurrentEvent.triggerRegion);
             case 'by-id': {
                 const { presetId } = region;
                 return () => {
@@ -743,7 +754,7 @@ let Command = new class CommandCompiler {
     compileTilemap(tilemap) {
         switch (tilemap.type) {
             case 'trigger':
-                return () => CurrentEvent.triggerTilemap;
+                return () => Command.filterValidObject(CurrentEvent.triggerTilemap);
             case 'by-id': {
                 const { presetId } = tilemap;
                 return () => {
@@ -762,10 +773,10 @@ let Command = new class CommandCompiler {
             case 'trigger':
                 return () => {
                     const object = CurrentEvent.triggerObject;
-                    return object instanceof Trigger ? undefined : object;
+                    return Command.filterValidObject(object instanceof Trigger ? undefined : object);
                 };
             case 'latest':
-                return () => Scene.latest;
+                return () => Command.filterValidObject(Scene.latest);
             case 'by-id': {
                 const { presetId } = object;
                 return () => {
@@ -776,7 +787,7 @@ let Command = new class CommandCompiler {
                 const getObject = Command.compileVariable(object.variable, Attribute.OBJECT_GET);
                 return () => {
                     const object = getObject();
-                    return object instanceof Actor
+                    return Command.filterValidObject(object instanceof Actor
                         || object instanceof SceneAnimation
                         || object instanceof SceneParticleEmitter
                         || object instanceof SceneRegion
@@ -784,7 +795,7 @@ let Command = new class CommandCompiler {
                         || object instanceof SceneParallax
                         || object instanceof SceneTilemap
                         ? object
-                        : undefined;
+                        : undefined);
                 };
             }
         }
@@ -1247,6 +1258,16 @@ let Command = new class CommandCompiler {
                             return () => Scene.preventInputEvents !== 0;
                         case 'scene-input-is-not-prevented':
                             return () => Scene.preventInputEvents === 0;
+                        case 'status-debugging':
+                            return () => !Data.config.deployed;
+                        case 'status-deployed':
+                            return () => Data.config.deployed;
+                        case 'platform-windows':
+                            return () => Stats.isWindows();
+                        case 'platform-macos':
+                            return () => Stats.isMacOS();
+                        case 'platform-mobile':
+                            return () => Stats.isMobile();
                     }
             }
             throw new Error('Invalid condition:', condition);
@@ -2109,6 +2130,12 @@ let Command = new class CommandCompiler {
                             return () => Item.increment;
                         case 'latest-money-increment':
                             return () => Inventory.moneyIncrement;
+                        case 'loader-loaded-bytes':
+                            return () => Loader.loadedBytes;
+                        case 'loader-total-bytes':
+                            return () => Loader.totalBytes;
+                        case 'loader-completion-progress':
+                            return () => Loader.completionProgress;
                     }
             }
             throw new Error('Compiling Error');
@@ -3011,6 +3038,7 @@ let Command = new class CommandCompiler {
             return null;
         }
         const compiledCommands = Command.compileIndependent(commands);
+        compiledCommands.path = commands.path = this.stack[0].path;
         compiledCommands.type = 'independent';
         return () => {
             const event = new EventHandler(compiledCommands);
@@ -6706,8 +6734,8 @@ let Command = new class CommandCompiler {
         let cursor = 'default';
         let promise = null;
         if (path) {
-            promise = Loader.getCachedUrl(image).then(url => {
-                cursor = `${CSS.encodeURL(url)}, default`;
+            promise = Loader.loadImage({ guid: image, save: true }).then(image => {
+                cursor = `${CSS.encodeURL(image.src)}, default`;
                 promise = null;
             }).catch(error => {
                 console.warn(error);

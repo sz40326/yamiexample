@@ -1,7 +1,7 @@
 /** WebGL上下文对象 */
 let GL;
 /** WebGL构造器 */
-let GLBuilder = new class WebGLBuilder {
+let WebGL = new class WebGLBuilder {
     /**
      * WebGL上下文选项
      * https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext
@@ -45,8 +45,14 @@ let GLBuilder = new class WebGLBuilder {
         const container = this.createContainer();
         // 创建画布元素
         const canvas = this.createCanvas();
-        // 设置低延时模式
+        // 设置WebGL选项
+        const map = {
+            nearest: WebGLRenderingContext.prototype.NEAREST,
+            linear: WebGLRenderingContext.prototype.LINEAR,
+        };
         this.webglOptions.desynchronized = Data.config.webgl.desynchronized;
+        this.textureOptions.magFilter = map[Data.config.webgl.textureMagFilter];
+        this.textureOptions.minFilter = map[Data.config.webgl.textureMinFilter];
         // 默认WebGL2(Win10 DirectX11)
         // 兼容WebGL1(Win7 DirectX9以及旧移动设备)
         GL = this.createWebGL2(canvas)
@@ -1584,7 +1590,6 @@ let GLBuilder = new class WebGLBuilder {
         };
         // WebGL上下文方法 - 创建图像纹理
         GL.createImageTexture = function (image, options = {}) {
-            const sync = options.sync ?? false;
             const guid = image instanceof Image ? image.guid : image;
             const manager = this.textureManager;
             let texture = manager.images[guid];
@@ -1609,13 +1614,18 @@ let GLBuilder = new class WebGLBuilder {
                         texture.reply('error');
                     }
                 };
-                image instanceof Image
-                    ? initialize(image)
-                    : Loader.get({
-                        guid: guid,
-                        sync: sync,
-                        type: 'image',
-                    }).then(initialize);
+                if (image instanceof HTMLImageElement) {
+                    initialize(image);
+                }
+                else {
+                    const image = Loader.getImage({ guid });
+                    if (image instanceof HTMLImageElement) {
+                        initialize(image);
+                    }
+                    else {
+                        Loader.loadImage({ guid }).then(initialize);
+                    }
+                }
             }
             return texture.increaseRefCount();
         };
@@ -1699,10 +1709,10 @@ class BaseTexture {
         this.width = 0;
         this.height = 0;
         this.format = options.format ?? GL.RGBA;
-        this.magFilter = options.magFilter ?? GLBuilder.textureOptions.magFilter;
-        this.minFilter = options.minFilter ?? GLBuilder.textureOptions.minFilter;
-        this.wrapS = options.wrapS ?? GLBuilder.textureOptions.wrapS;
-        this.wrapT = options.wrapT ?? GLBuilder.textureOptions.wrapT;
+        this.magFilter = options.magFilter ?? WebGL.textureOptions.magFilter;
+        this.minFilter = options.minFilter ?? WebGL.textureOptions.minFilter;
+        this.wrapS = options.wrapS ?? WebGL.textureOptions.wrapS;
+        this.wrapT = options.wrapT ?? WebGL.textureOptions.wrapT;
         this.index = -1;
         this.guid = '';
         this.refCount = 0;

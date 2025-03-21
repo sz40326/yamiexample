@@ -35,7 +35,7 @@ let AudioManager = new class GameAudioManager {
             AudioReverb.getConvolver();
         });
         // 移动设备：切出去的时候暂停播放
-        if (Stats.deviceType === 'mobile') {
+        if (Stats.isMobile()) {
             document.on('visibilitychange', () => {
                 if (context.state === 'running') {
                     if (document.hidden) {
@@ -156,7 +156,7 @@ class SingleAudioPlayer {
             if (audio.guid !== guid ||
                 audio.readyState !== 4 ||
                 audio.ended === true) {
-                audio.src = Loader.getPathByGUID(guid);
+                audio.src = Loader.getBlobOrRawUrl(guid);
                 audio.guid = guid;
                 audio.volume = volume;
             }
@@ -200,7 +200,7 @@ class SingleAudioPlayer {
         const cache = this.cache;
         if (cache !== null) {
             const audio = this.audio;
-            audio.src = Loader.getPathByGUID(cache.guid);
+            audio.src = Loader.getBlobOrRawUrl(cache.guid);
             audio.guid = cache.guid;
             audio.currentTime = cache.offset;
             this.cache = null;
@@ -401,7 +401,7 @@ class MultipleAudioPlayer {
                 const audio = this.getAudio();
                 audio.guid = guid;
                 audio.timestamp = Time.timestamp;
-                audio.src = Loader.getPathByGUID(guid);
+                audio.src = Loader.getBlobOrRawUrl(guid);
                 audio.volume = volume;
                 audio.playbackRate = playbackRate;
                 return audio;

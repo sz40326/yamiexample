@@ -190,7 +190,7 @@ export default class BlurCommand {
         program.a_TexCoord = a_TexCoord;
         program.u_Matrix = u_Matrix;
         program.u_Offset = u_Offset;
-        return program;
+        return program.use();
     }
 }
 //# sourceMappingURL=%E5%9C%BA%E6%99%AF%E6%A8%A1%E7%B3%8A.%E6%8C%87%E4%BB%A4.78ad4052c278d184.js.map

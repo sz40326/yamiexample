@@ -74,8 +74,6 @@ class AnimationPlayer {
     existParticles;
     /** 动画播放结束回调函数列表 */
     callbacks;
-    /** 动画播放器对自己的引用 */
-    animation;
     /** 父节点对象 */
     parent;
     /** 是否已销毁 */
@@ -140,7 +138,6 @@ class AnimationPlayer {
         this.emitterCount = 0;
         this.existParticles = false;
         this.callbacks = null;
-        this.animation = this;
         this.parent = null;
         this.destroyed = false;
     }

@@ -1048,6 +1048,8 @@ class UIElement {
     script;
     /** 已开始状态 */
     started;
+    /** 是否已销毁 */
+    destroyed;
     /** 默认元素数据 */
     static defaultData = {
         presetId: '',
@@ -1101,6 +1103,7 @@ class UIElement {
         this.registeredEvents = {};
         this.script = ScriptManager.create(this, data.scripts);
         this.started = false;
+        this.destroyed = false;
         // 添加到界面实体管理器
         UI.entity.add(this);
         // 添加到全局实体管理器
@@ -1614,18 +1617,21 @@ class UIElement {
     }
     /** 销毁元素 */
     destroy() {
-        this.emit('destroy');
-        if (this.connected) {
-            this.remove();
+        if (!this.destroyed) {
+            this.emit('destroy');
+            this.destroyed = true;
+            if (this.connected) {
+                this.remove();
+            }
+            // 从界面实体管理器中移除
+            UI.entity.remove(this);
+            // 从全局实体管理器中移除
+            GlobalEntityManager.remove(this);
+            // 移除按钮焦点和指针事件根元素(如果存在)
+            UI.removeFocus(this);
+            UI.removePointerEventRoot(this);
+            this.destroyChildren();
         }
-        // 从界面实体管理器中移除
-        UI.entity.remove(this);
-        // 从全局实体管理器中移除
-        GlobalEntityManager.remove(this);
-        // 移除按钮焦点和指针事件根元素(如果存在)
-        UI.removeFocus(this);
-        UI.removePointerEventRoot(this);
-        this.destroyChildren();
     }
 }
 /** ******************************** 根元素 ******************************** */
@@ -1920,8 +1926,10 @@ class ImageElement extends UIElement {
     }
     /** 销毁图像元素 */
     destroy() {
-        this.texture?.destroy();
-        return super.destroy();
+        if (!this.destroyed) {
+            this.texture?.destroy();
+            return super.destroy();
+        }
     }
     /**
      * 计算外接矩形
@@ -2492,9 +2500,11 @@ class TextElement extends UIElement {
     }
     /** 销毁文本元素 */
     destroy() {
-        this.texture?.destroy();
-        this.printer?.destroy();
-        return super.destroy();
+        if (!this.destroyed) {
+            this.texture?.destroy();
+            this.printer?.destroy();
+            return super.destroy();
+        }
     }
 }
 /** ******************************** 文本框元素 ******************************** */
@@ -3232,18 +3242,20 @@ class TextBoxElement extends UIElement {
     }
     /** 销毁文本框元素 */
     destroy() {
-        this.texture?.destroy();
-        if (this.input) {
-            document.body.removeChild(this.input);
-            if (this.connected) {
-                this.removeEventListeners();
+        if (!this.destroyed) {
+            this.texture?.destroy();
+            if (this.input) {
+                document.body.removeChild(this.input);
+                if (this.connected) {
+                    this.removeEventListeners();
+                }
+                // 解除元素和DOM的绑定，让元素被垃圾回收
+                // INPUT可能会在历史操作中保留一段时间
+                delete this.input.events;
+                delete this.input.target;
             }
-            // 解除元素和DOM的绑定，让元素被垃圾回收
-            // INPUT可能会在历史操作中保留一段时间
-            delete this.input.events;
-            delete this.input.target;
+            return super.destroy();
         }
-        return super.destroy();
     }
 }
 /** ******************************** 对话框元素 ******************************** */
@@ -3722,9 +3734,11 @@ class DialogBoxElement extends UIElement {
     }
     /** 销毁对话框元素 */
     destroy() {
-        this.texture?.destroy();
-        this.printer?.destroy();
-        return super.destroy();
+        if (!this.destroyed) {
+            this.texture?.destroy();
+            this.printer?.destroy();
+            return super.destroy();
+        }
     }
 }
 /** ******************************** 进度条元素 ******************************** */
@@ -4144,8 +4158,10 @@ class ProgressBarElement extends UIElement {
     }
     /** 销毁进度条元素 */
     destroy() {
-        this.texture?.destroy();
-        return super.destroy();
+        if (!this.destroyed) {
+            this.texture?.destroy();
+            return super.destroy();
+        }
     }
 }
 /** ******************************** 按钮元素 ******************************** */
@@ -4790,9 +4806,11 @@ class ButtonElement extends UIElement {
     }
     /** 销毁元素 */
     destroy() {
-        this.shadowImage.destroy();
-        this.shadowText.destroy();
-        return super.destroy();
+        if (!this.destroyed) {
+            this.shadowImage.destroy();
+            this.shadowText.destroy();
+            return super.destroy();
+        }
     }
 }
 /** ******************************** 动画元素 ******************************** */
@@ -4974,8 +4992,10 @@ class AnimationElement extends UIElement {
     }
     /** 销毁元素 */
     destroy() {
-        this.player?.destroy();
-        return super.destroy();
+        if (!this.destroyed) {
+            this.player?.destroy();
+            return super.destroy();
+        }
     }
 }
 /** ******************************** 视频元素 ******************************** */
@@ -5204,13 +5224,15 @@ class VideoElement extends UIElement {
     }
     /** 销毁视频元素 */
     destroy() {
-        this.player.pause();
-        this.texture?.destroy();
-        // 如果当前状态不是已结束，发送模拟事件
-        if (this.state !== 'ended') {
-            this.player.dispatchEvent(new Event('ended'));
+        if (!this.destroyed) {
+            this.player.pause();
+            this.texture?.destroy();
+            // 如果当前状态不是已结束，发送模拟事件
+            if (this.state !== 'ended') {
+                this.player.dispatchEvent(new Event('ended'));
+            }
+            return super.destroy();
         }
-        return super.destroy();
     }
 }
 /** ******************************** 窗口元素 ******************************** */

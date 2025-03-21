@@ -2549,7 +2549,7 @@ class SceneTilemap {
             for (let i = 0; i < length; i++) {
                 const tile = tiles[i];
                 if (tile !== 0) {
-                    this.loadTexture(tile, true);
+                    this.loadTexture(tile);
                 }
             }
             // 不存在图块纹理，立即返回
@@ -2579,7 +2579,7 @@ class SceneTilemap {
      * @param sync 是否同步加载纹理
      * @param callback 回调函数
      */
-    loadTexture(tile, sync, callback) {
+    loadTexture(tile, callback) {
         const tileData = this.tileData[tile & 0xffffff00];
         if (tileData) {
             let texture;
@@ -2588,7 +2588,7 @@ class SceneTilemap {
                     const guid = tileData.tileset.image;
                     texture = this.textures[guid];
                     if (guid && texture === undefined) {
-                        texture = GL.createImageTexture(guid, { sync });
+                        texture = GL.createImageTexture(guid, { magFilter: GL.NEAREST });
                         this.textures[guid] = texture;
                     }
                     break;
@@ -2597,7 +2597,7 @@ class SceneTilemap {
                     const guid = tileData.autoTile.image;
                     texture = this.textures[guid];
                     if (guid && texture === undefined) {
-                        texture = GL.createImageTexture(guid, { sync });
+                        texture = GL.createImageTexture(guid, { magFilter: GL.NEAREST });
                         this.textures[guid] = texture;
                     }
                     break;
@@ -2837,7 +2837,7 @@ class SceneTilemap {
                 if (this.imageData[tile] === undefined) {
                     // 避免多次调用重复生成图像数据
                     this.imageData[tile] = null;
-                    this.loadTexture(tile, false, () => {
+                    this.loadTexture(tile, () => {
                         this.imageData[tile] = undefined;
                         this.createImageData(tile);
                     });
@@ -2911,7 +2911,7 @@ class SceneTilemap {
                         if (this.imageData[nTile] === undefined) {
                             // 避免多次调用重复生成图像数据
                             this.imageData[nTile] = null;
-                            this.loadTexture(nTile, false, () => {
+                            this.loadTexture(nTile, () => {
                                 this.imageData[nTile] = undefined;
                                 this.createImageData(nTile);
                             });
@@ -5232,13 +5232,10 @@ class SceneSpriteRenderer {
                     }
                 }
             }
-            else if (a <= 2) {
-                // 遍历动画相关对象
+            else if (a === 1) {
+                // 遍历动画对象
                 for (let i = 0; i < length; i++) {
-                    const object = objectList[i];
-                    const { animation } = object;
-                    if (animation === null)
-                        continue;
+                    const animation = objectList[i];
                     const { x, y } = animation.position;
                     // 如果动画在屏幕中可见或动画存在已激活粒子的情况
                     if (x >= al && x < ar && y >= at && y < ab && animation.visible) {
@@ -5264,9 +5261,47 @@ class SceneSpriteRenderer {
                         set[si++] = 0;
                         di += 2;
                         animation.activate(ax, ay, px, py);
-                        cacheList[count++] = object;
+                        cacheList[count++] = animation;
                     }
                     else if (animation.existParticles) {
+                        // 如果动画中存在粒子，更新粒子发射器的矩阵
+                        const { x: ax, y: ay } = convert2f(x, y);
+                        animation.activate(ax, ay, 0, 0);
+                    }
+                }
+            }
+            else if (a === 2) {
+                for (let i = 0; i < length; i++) {
+                    const trigger = objectList[i];
+                    const animation = trigger.animation;
+                    const { x, y } = trigger;
+                    // 如果动画在屏幕中可见或动画存在已激活粒子的情况
+                    if (x >= al && x < ar && y >= at && y < ab) {
+                        // 计算动画的锚点
+                        const { x: ax, y: ay } = convert2f(x, y);
+                        // 计算锚点在光照贴图中的位置
+                        const px = (ax - ll) / lw;
+                        const py = (ay - lt) / lh;
+                        const p = animation ? animation.priority * pFactor : 0;
+                        // 根据锚点的Y坐标来计算优先级，并作为键
+                        const key = max(0, min(0x3ffff, round((py + p) * 0x20000 + 0x10000)));
+                        datau[di] = 0x10000 | a;
+                        datau[di + 1] = count;
+                        if (starts[key] === 0) {
+                            starts[key] = si;
+                            layers[li++] = key;
+                        }
+                        else {
+                            set[ends[key] + 1] = si;
+                        }
+                        ends[key] = si;
+                        set[si++] = di;
+                        set[si++] = 0;
+                        di += 2;
+                        animation?.activate(ax, ay, px, py);
+                        cacheList[count++] = trigger;
+                    }
+                    else if (animation?.existParticles) {
                         // 如果动画中存在粒子，更新粒子发射器的矩阵
                         const { x: ax, y: ay } = convert2f(x, y);
                         animation.activate(ax, ay, 0, 0);
@@ -5406,15 +5441,20 @@ class SceneSpriteRenderer {
                         const li = code1 & 0xffff;
                         const object = cacheLists[li][code2];
                         animLists[li][indices[li]++] = object;
-                        if (li === 0) {
-                            object.animationManager.draw();
-                        }
-                        else if (li <= 2) {
-                            object.animation.draw();
-                        }
-                        else {
-                            gl.batchRenderer.draw();
-                            object.draw();
+                        switch (li) {
+                            case 0:
+                                object.animationManager.draw();
+                                break;
+                            case 1:
+                                object.draw();
+                                break;
+                            case 2:
+                                object.animation?.draw();
+                                break;
+                            case 3:
+                                gl.batchRenderer.draw();
+                                object.draw();
+                                break;
                         }
                     }
                 } while ((si = set[si + 1]) !== 0);

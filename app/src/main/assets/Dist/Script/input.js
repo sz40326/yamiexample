@@ -212,7 +212,7 @@ let Input = new class InputManager {
      */
     keydownFilter(event) {
         // 如果是本地运行，返回
-        if (Stats.isOnClient) {
+        if (Stats.shell === 'electron') {
             return;
         }
         // 阻止默认按键行为(Web模式)

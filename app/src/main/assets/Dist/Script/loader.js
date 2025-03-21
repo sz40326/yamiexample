@@ -1,22 +1,93 @@
 /** ******************************** 文件加载器 ******************************** */
 let Loader = new class FileLoader {
-    /** 同步加载文件映射表 */
-    syncLoadings = new Map();
-    /** 加载文件Promise集合 */
-    loadingPromises = {};
-    /** 加载进度 */
-    loadingProgress = 0;
-    /** 游戏文件缓存列表 */
-    cachedBlobs = [];
+    /** 是否已完成加载 */
+    complete = true;
+    /** 已加载字节数 */
+    loadedBytes = 0;
+    /** 总字节数 */
+    totalBytes = 0;
+    /** 加载完成进度 */
+    completionProgress = 0;
+    /** 加载进度列表 */
+    loadingProgressList = [];
+    /** 等待加载 */
+    promise = Promise.resolve();
+    /** 完成加载 */
+    resolve = Function.empty;
+    /** {guid:图像}缓存表 */
+    cachedImages = {};
     /** {guid:缓存链接}映射表 */
     cachedUrls = {};
+    /** {url:二进制文件}缓存表 */
+    cachedBlobs = {};
+    /**
+     * 完成加载
+     */
+    finish() {
+        if (this.loadingProgressList.length !== 0) {
+            this.loadingProgressList.length = 0;
+            this.complete = true;
+            this.loadedBytes = 0;
+            this.totalBytes = 0;
+            this.completionProgress = 0;
+            this.resolve();
+        }
+    }
+    /**
+     * 预加载文件
+     */
+    async preload() {
+        const { preload, deployed } = Data.config;
+        if (preload === 'never' ||
+            preload === 'deployed' && !deployed) {
+            return;
+        }
+        // 筛选出需要加载的文件，并统计字节数
+        const images = [];
+        const audio = [];
+        let totalBytes = 0;
+        for (const { guid, size } of Data.manifest.images) {
+            if (size !== 0) {
+                totalBytes += size;
+                images.push(guid);
+            }
+        }
+        for (const { path, size } of Data.manifest.audio) {
+            if (size !== 0) {
+                totalBytes += size;
+                audio.push(path);
+            }
+        }
+        // 临时修改相关方法
+        // 等待预加载事件中的文件加载完毕
+        const { finish } = this;
+        this.finish = () => {
+            finish.call(this);
+            this.totalBytes = totalBytes;
+        };
+        this.finish();
+        this.updateLoadingStats = Function.empty;
+        EventManager.emit('preload');
+        await this.promise;
+        // @ts-ignore
+        delete this.updateLoadingStats;
+        // 开始预加载文件
+        const promises = [];
+        for (const guid of images) {
+            promises.push(Loader.loadImage({ guid }));
+        }
+        for (const path of audio) {
+            promises.push(Loader.getBlobUrl(path));
+        }
+        await Promise.all(promises);
+    }
     /**
      * 解密文件
      * @returns 解密后的数据
      */
     async decrypt(options) {
-        const { path, type, sync } = options;
-        const buffer = window.decrypt(await Loader.xhr({ path, sync, type: 'arraybuffer' }));
+        const { path, type } = options;
+        const buffer = window.decrypt(await Loader.xhr({ path, type: 'arraybuffer' }));
         switch (type) {
             case 'text':
                 return Codec.textDecoder.decode(buffer);
@@ -31,76 +102,53 @@ let Loader = new class FileLoader {
      * @param descriptor 文件描述器
      * @returns 文件数据
      */
-    get(descriptor) {
+    async get(descriptor) {
         // 可以指定路径或GUID来加载文件
-        let path = descriptor.path;
         const guid = descriptor.guid ?? '';
+        const path = descriptor.path ?? this.getPathByGUID(guid);
         const type = descriptor.type;
-        const sync = descriptor.sync ?? false;
         switch (type) {
-            case 'image': {
-                const key = path ?? guid;
-                const { loadingPromises } = this;
-                // 如果当前图像已在加载中，则返回Promise，否则新建
-                return loadingPromises[key] || (loadingPromises[key] = new Promise(async (resolve) => {
-                    const image = new Image();
-                    // 给图像元素设置guid用于纹理的查找
-                    image.guid = guid;
-                    // 加载图像资源
-                    image.onload = () => {
-                        delete loadingPromises[key];
-                        image.onload = null;
-                        image.onerror = null;
-                        resolve(image);
-                    };
-                    image.onerror = () => {
-                        delete loadingPromises[key];
-                        image.onload = null;
-                        image.onerror = null;
-                        image.src = '';
-                        resolve(null);
-                    };
-                    image.src = path ?? await Loader.getCachedUrl(guid, sync);
-                }));
-            }
+            case 'image':
+                return this.loadImage({ guid, path });
             default:
-                if (path === undefined) {
-                    path = this.getPathByGUID(guid);
-                }
                 return /\.dat$/.test(path)
-                    ? this.decrypt({ path, sync, type })
-                    : this.xhr({ path, sync, type });
+                    ? this.decrypt({ path, type })
+                    : this.xhr({ path, type });
         }
     }
     /**
      * 使用XHR方法加载文件
      * @returns 响应数据
      */
-    xhr(options) {
+    xhr({ path, type }) {
         return new Promise((resolve, reject) => {
+            const meta = Data.manifest?.pathMap[path];
+            const size = meta?.size ?? 0;
             const request = new XMLHttpRequest();
-            if (options.sync) {
-                // 同步加载即时更新进度
-                request.onloadstart =
-                    request.onprogress = event => {
-                        this.syncLoadings.set(request, new LoadingProgress(event));
-                    };
-                request.onload = event => {
-                    this.syncLoadings.set(request, new LoadingProgress(event));
-                    resolve(request.response);
-                };
-                request.onerror = event => {
-                    this.syncLoadings.delete(request);
-                    reject(request.response);
-                };
+            const progress = new LoadingProgress(size);
+            // 开始新的加载任务
+            if (this.complete) {
+                this.complete = false;
+                this.promise = new Promise(resolve => {
+                    this.resolve = resolve;
+                });
             }
-            else {
-                // 异步加载
-                request.onload = event => resolve(request.response);
-                request.onerror = event => reject(request.response);
-            }
-            request.open('GET', options.path);
-            request.responseType = options.type;
+            this.loadingProgressList.push(progress);
+            // 更新加载进度
+            request.onloadstart =
+                request.onprogress = event => {
+                    progress.update(event);
+                };
+            request.onload = event => {
+                progress.update(event);
+                resolve(request.response);
+            };
+            request.onerror = event => {
+                progress.loaded = size;
+                reject(request.response);
+            };
+            request.open('GET', path);
+            request.responseType = type;
             request.send();
         });
     }
@@ -128,22 +176,68 @@ let Loader = new class FileLoader {
     getPathByGUID(guid) {
         return Data.manifest.guidMap[guid]?.path ?? '';
     }
-    /** 获取缓存链接 */
-    async getCachedUrl(guid, sync = false) {
+    /**
+     * 获取缓存图像
+     * @returns 图像DOM元素
+     */
+    getImage({ guid, path }) {
+        if (guid === undefined) {
+            guid = '';
+        }
+        if (path === undefined) {
+            path = this.getPathByGUID(guid);
+        }
+        const key = path ?? guid;
+        const image = this.cachedImages[key];
+        return image instanceof HTMLImageElement ? image : null;
+    }
+    /**
+     * 加载缓存图像
+     * @returns 图像DOM元素
+     */
+    async loadImage({ guid, path, save }) {
+        guid = guid ?? '';
+        path = path ?? this.getPathByGUID(guid);
+        save = save ?? false;
+        const key = path ?? guid;
+        const images = this.cachedImages;
+        return images[key] ??=
+            new Promise(async (resolve) => {
+                const image = new Image();
+                // 给图像元素设置guid用于纹理的查找
+                image.guid = guid;
+                // 加载图像资源
+                image.onload =
+                    image.onerror = () => {
+                        if (!save) {
+                            this.revokeBlobUrl(image.src);
+                        }
+                        images[key] = image;
+                        image.onload = null;
+                        image.onerror = null;
+                        resolve(image);
+                    };
+                image.src = await this.getBlobUrl(path);
+            });
+    }
+    /**
+     * 获取二进制对象链接
+     * @param path 原生路径
+     * @returns 二进制对象链接
+     */
+    async getBlobUrl(path) {
         const { cachedUrls } = this;
-        const url = cachedUrls[guid];
+        const url = cachedUrls[path];
         // 返回已经缓存的链接
         if (typeof url === 'string') {
             return url;
         }
         // 先暂时把原始链接作为缓存链接
         // 等待文件加载后生成并替换缓存链接
-        const path = Loader.getPathByGUID(guid);
-        cachedUrls[guid] = path;
+        cachedUrls[path] = path;
         try {
             let buffer = await Loader.xhr({
                 path: path,
-                sync: sync,
                 type: 'arraybuffer',
             });
             if (/\.dat$/.test(path)) {
@@ -151,94 +245,61 @@ let Loader = new class FileLoader {
             }
             const blob = new Blob([buffer]);
             const url = URL.createObjectURL(blob);
-            this.cachedBlobs.push(blob);
-            return cachedUrls[guid] = url;
+            this.cachedBlobs[url] = blob;
+            return cachedUrls[path] = url;
         }
         catch (error) {
             return '';
         }
     }
     /**
-     * 更新同步加载进度
-     * @returns 加载是否完成
+     * 撤回二进制对象链接(释放内存)
+     * @param url 二进制对象链接
      */
-    updateLoadingProgress() {
-        // 如果不存在同步加载，则继续
-        const { syncLoadings } = this;
-        if (syncLoadings.size === 0) {
-            return false;
+    revokeBlobUrl(url) {
+        if (url in this.cachedBlobs) {
+            delete this.cachedBlobs[url];
+            URL.revokeObjectURL(url);
         }
+    }
+    /**
+     * 获取二进制对象或原生链接
+     * @param path 原生路径
+     */
+    getBlobOrRawUrl(guid) {
+        const path = this.getPathByGUID(guid);
+        return this.cachedUrls[path] ?? path;
+    }
+    /**
+     * 更新加载进度
+     * @param deltaTime 增量时间
+     */
+    update(deltaTime) {
+        // 如果不存在加载进度，则返回
+        if (this.complete) {
+            return this.finish();
+        }
+        const { loadingProgressList } = this;
         // 统计已加载和总的数据字节大小
         let loaded = 0;
         let total = 0;
         let complete = true;
-        for (const progress of syncLoadings.values()) {
-            if (progress.lengthComputable) {
-                loaded += progress.loaded;
-                total += progress.total;
-            }
+        for (const progress of loadingProgressList) {
+            loaded += progress.loaded;
+            total += progress.total || progress.fileSize;
             if (!progress.isComplete()) {
                 complete = false;
             }
         }
         // 计算加载进度
-        this.loadingProgress = loaded / (total || Infinity);
-        // 加载进度为100%，不存在未知数据大小，已导入所有字体，则判定为加载完成
-        if (complete && !Printer.importing.length) {
-            // 删除同步加载进度表中的所有键值对
-            for (const key of syncLoadings.keys()) {
-                syncLoadings.delete(key);
-            }
-            // 移除进度条后继续
-            GL.container.progress &&
-                GL.container.progress.remove();
-            return false;
-        }
-        // 未加载完成
-        return true;
+        this.complete = complete;
+        this.updateLoadingStats(loaded, total);
     }
-    /** 渲染同步加载进度 */
-    renderLoadingProgress() {
-        if (!GL)
-            return;
-        // 擦除游戏画布内容(显示为黑屏)
-        GL.clearColor(0, 0, 0, 0);
-        GL.clear(GL.COLOR_BUFFER_BIT);
-        // 只有Web模式下才会显示进度条
-        if (!Stats.isOnClient) {
-            if (!GL.container.progress) {
-                // 创建进度条并设置样式
-                const progress = document.createElement('div');
-                progress.style.position = 'absolute';
-                progress.style.left = '0';
-                progress.style.bottom = '0';
-                progress.style.height = '10px';
-                progress.style.backgroundImage = `
-        linear-gradient(
-          to right,
-          white 0%,
-          white 33%,
-          transparent 33%,
-          transparent 100%
-        )`;
-                progress.style.backgroundSize = '3px 1px';
-                progress.style.pointerEvents = 'none';
-                // 设置移除进度条方法(加载完成时调用)
-                progress.remove = () => {
-                    delete GL.container.progress;
-                    GL.container.removeChild(progress);
-                };
-                // 添加进度条到容器元素中
-                GL.container.progress = progress;
-                GL.container.appendChild(progress);
-            }
-            // 更新当前的进度
-            const percent = Math.round(this.loadingProgress * 100);
-            if (GL.container.progress.percent !== percent) {
-                GL.container.progress.percent = percent;
-                GL.container.progress.style.width = `${percent}%`;
-            }
-        }
+    /** 更新统计数据 */
+    updateLoadingStats(loaded, total) {
+        this.loadedBytes = loaded;
+        this.totalBytes = total;
+        this.completionProgress = loaded / (total || Infinity);
     }
 };
 /** ******************************** 加载进度 ******************************** */
@@ -249,10 +310,13 @@ class LoadingProgress {
     total;
     /** 是否可计算长度 */
     lengthComputable;
-    constructor(event) {
-        this.loaded = event.loaded;
-        this.total = event.total;
-        this.lengthComputable = event.lengthComputable;
+    /** 文件大小 */
+    fileSize;
+    constructor(fileSize) {
+        this.loaded = 0;
+        this.total = 0;
+        this.lengthComputable = false;
+        this.fileSize = fileSize;
     }
     /** 更新加载数据 */
     update(event) {

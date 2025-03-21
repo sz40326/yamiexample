@@ -15,6 +15,8 @@ import com.taptap.sdk.kit.internal.exception.TapTapException
 import com.taptap.sdk.login.Scopes
 import com.taptap.sdk.login.TapTapAccount
 import com.taptap.sdk.login.TapTapLogin
+import com.taptap.sdk.update.TapTapUpdate
+import com.taptap.sdk.update.TapTapUpdateCallback
 import org.json.JSONObject
 import java.lang.ref.WeakReference
 
@@ -51,6 +53,23 @@ internal class JsInterface private constructor() {
     fun toast(str: String) {
         activityRef.get()?.let { activity ->
             Toast.makeText(getApplicationContext(), str, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    @JavascriptInterface
+    fun updateTapTap(cid: String) {
+        val webView = webViewRef.get()
+        activityRef.get()?.let {
+            if (webView == null || it == null) {
+                return
+            }
+            TapTapUpdate.updateGame(activity = it, callback = object : TapTapUpdateCallback {
+
+                override fun onCancel() {
+                    webView.evaluateJavascript("javascript:EventManager.call(${cid})",
+                        ValueCallback<String> {})
+                }
+            })
         }
     }
 

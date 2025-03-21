@@ -1156,7 +1156,6 @@ class Printer {
             promises.push(Loader.get({
                 path: path,
                 type: 'arraybuffer',
-                sync: true,
             }).then(buffer => {
                 new FontFace(name, buffer).load().then(font => {
                     fontFaces[guid] = font;

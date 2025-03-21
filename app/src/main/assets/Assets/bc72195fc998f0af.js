@@ -15,7 +15,7 @@
 */
 export default class ExitTheGame {
     call() {
-        if (Stats.isOnClient) {
+        if (Stats.shell === 'electron') {
             window.close();
         }
     }

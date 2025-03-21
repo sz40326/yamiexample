@@ -66,6 +66,7 @@ let EventManager = new class GlobalEventManager {
         loadsave: [],
         showtext: [],
         showchoices: [],
+        preload: [],
     };
     /** {注册键:事件}映射表 */
     keyMap = {};
@@ -293,6 +294,27 @@ let EventManager = new class GlobalEventManager {
                 }
             }
         }
+        // 调试模式下检查独立执行事件
+        if (Stats.debug) {
+            for (const event of this.activeEvents) {
+                if (event.type === 'independent') {
+                    const independent = event;
+                    if (independent.debugTimeout === undefined) {
+                        independent.debugTimeout = 0;
+                    }
+                    else {
+                        independent.debugTimeout += deltaTime;
+                        if (independent.debugTimeout >= 60000) {
+                            independent.debugTimeout = -Infinity;
+                            const initial = independent.initial;
+                            const warning = `An "Independent" event remains in the background.\n${initial.path}`;
+                            console.warn(warning);
+                            MessageReporter.displayMessage(warning);
+                        }
+                    }
+                }
+            }
+        }
     }
     /**
      * 启用全局事件(延迟)
@@ -349,9 +371,6 @@ let PluginManager = new class PluginManager {
     /** 初始化插件管理器 */
     initialize() {
         const plugins = Data.plugins;
-        // 删除初始化方法和插件数据
-        delete this.initialize;
-        delete Data.plugins;
         const manager = ScriptManager.create({}, plugins);
         // 获取脚本实例，以类名作为键进行注册
         for (const instance of manager.instances) {
@@ -1110,6 +1129,9 @@ class ScriptManager {
         click: 'onClick',
         doubleclick: 'onDoubleClick',
         wheel: 'onWheel',
+        touchstart: 'onTouchStart',
+        touchmove: 'onTouchMove',
+        touchend: 'onTouchEnd',
         select: 'onSelect',
         deselect: 'onDeselect',
         input: 'onInput',
@@ -1124,6 +1146,7 @@ class ScriptManager {
         createscene: 'onSceneCreate',
         loadscene: 'onSceneLoad',
         loadsave: 'onSaveLoad',
+        preload: 'onPreload',
     };
 }
 /** ******************************** 脚本键盘事件 ******************************** */
