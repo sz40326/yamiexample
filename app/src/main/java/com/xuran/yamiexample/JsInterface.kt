@@ -1,13 +1,16 @@
 package com.xuran.yamiexample
 
-import android.app.Activity
 import android.Manifest
-import android.app.Notification
+import android.app.Activity
+import android.app.Application.ActivityLifecycleCallbacks
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Bundle
+import android.os.Handler
+import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.ValueCallback
 import android.webkit.WebView
@@ -25,6 +28,8 @@ import com.taptap.sdk.core.TapTapSdk
 import com.taptap.sdk.core.TapTapSdkOptions
 import com.taptap.sdk.kit.internal.callback.TapTapCallback
 import com.taptap.sdk.kit.internal.exception.TapTapException
+import com.taptap.sdk.kit.internal.utils.TapActivityLifecycleCallbacks
+import com.taptap.sdk.kit.internal.utils.TapActivityLifecycleTracker.registerActivityLifecycleCallbacks
 import com.taptap.sdk.login.Scopes
 import com.taptap.sdk.login.TapTapAccount
 import com.taptap.sdk.login.TapTapLogin
@@ -32,7 +37,7 @@ import com.taptap.sdk.update.TapTapUpdate
 import com.taptap.sdk.update.TapTapUpdateCallback
 import org.json.JSONObject
 import java.lang.ref.WeakReference
-import kotlin.random.Random
+
 
 // Notification ID.
 private var NOTIFICATION_ID = 1001099
@@ -42,15 +47,88 @@ internal class JsInterface private constructor() {
     private var activityRef = WeakReference<Activity>(null)
     private var webViewRef = WeakReference<WebView>(null)
     private var clientId = ""
+    private var exitApp = false
+
+    //    生命周期事件ID
+    private var create_id = ""
+    private var destroy_id = ""
+    private var front_id = ""
+    private var background_id = ""
 
     companion object {
         @Volatile
         private var instance: JsInterface? = null
-
+        private var countActivity = 0
+        private var isBackground = false
+        private var started: Boolean? = null
         fun getInstance(): JsInterface {
             return instance ?: synchronized(this) {
                 instance ?: JsInterface().also { instance = it }
             }
+        }
+
+
+        fun initBackgroundCallBack() {
+            registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks,
+                TapActivityLifecycleCallbacks {
+                override fun onActivityCreated(activity: Activity, bundle: Bundle?) {
+                }
+
+                override fun onActivityStarted(activity: Activity) {
+                    countActivity++
+                    if (countActivity == 1 && started !== false) {
+                        if (started == null) {
+                            started = true
+                            getInstance().exitApp = false
+                            Handler().postDelayed({
+                                run() {
+                                    getInstance().webViewRef.get()?.let {
+                                        it.evaluateJavascript("javascript:EventManager.call('${getInstance().create_id}')",
+                                            ValueCallback<String> {})
+                                    }
+                                }
+                            }, 1500);
+                        }
+                    } else if (countActivity > 1 && started == true && isBackground) {
+                        isBackground = false
+                        getInstance().webViewRef.get()?.let {
+                            it.evaluateJavascript("javascript:EventManager.call('${getInstance().front_id}')",
+                                ValueCallback<String> {})
+                        }
+                    }
+                }
+
+                override fun onActivityResumed(activity: Activity) {
+                }
+
+                override fun onActivityPaused(activity: Activity) {
+                }
+
+                override fun onActivityStopped(activity: Activity) {
+                    countActivity--
+                    if (countActivity === -2 && started == true) {
+                        if (getInstance().exitApp) {
+                            started = null
+                            getInstance().webViewRef.get()?.let {
+                                it.evaluateJavascript("javascript:EventManager.call('${getInstance().destroy_id}')",
+                                    ValueCallback<String> {})
+                            }
+                        } else if (!isBackground) {
+                            isBackground = true
+                            getInstance().webViewRef.get()?.let {
+                                it.evaluateJavascript("javascript:EventManager.call('${getInstance().background_id}')",
+                                    ValueCallback<String> {})
+                            }
+                        }
+                    }
+                }
+
+                override fun onActivitySaveInstanceState(activity: Activity, bundle: Bundle) {
+                }
+
+                override fun onActivityDestroyed(activity: Activity) {
+                }
+            })
         }
     }
 
@@ -60,9 +138,27 @@ internal class JsInterface private constructor() {
     }
 
     @JavascriptInterface
+    fun lifeCycle(
+        create_id: String, destroy_id: String, front_id: String, background_id: String
+    ) {
+        activityRef.get()?.let { activity ->
+            this@JsInterface.create_id = create_id
+            this@JsInterface.destroy_id = destroy_id
+            this@JsInterface.front_id = front_id
+            this@JsInterface.background_id = background_id
+        }
+    }
+
+    @JavascriptInterface
     fun exitApp() {
         activityRef.get()?.let { activity ->
-            activity.finish()
+            activity.finishAfterTransition()
+            exitApp = true
+            Handler().postDelayed({
+                run() {
+                    android.os.Process.killProcess(android.os.Process.myPid());
+                }
+            }, 1000);
         }
     }
 
@@ -169,7 +265,7 @@ internal class JsInterface private constructor() {
             TapTapUpdate.updateGame(activity = it, callback = object : TapTapUpdateCallback {
 
                 override fun onCancel() {
-                    webView.evaluateJavascript("javascript:EventManager.call(${cid})",
+                    webView.evaluateJavascript("javascript:EventManager.call('${cid}')",
                         ValueCallback<String> {})
                 }
             })
@@ -205,14 +301,14 @@ internal class JsInterface private constructor() {
 
                     override fun onCancel() {
                         webViewRef.get()?.let { activity ->
-                            webView.evaluateJavascript("javascript:EventManager.call(${cid})",
+                            webView.evaluateJavascript("javascript:EventManager.call('${cid}')",
                                 ValueCallback<String> {})
                         }
                     }
 
                     override fun onFail(exception: TapTapException) {
                         webViewRef.get()?.let { activity ->
-                            webView.evaluateJavascript("javascript:EventManager.call(${fid})",
+                            webView.evaluateJavascript("javascript:EventManager.call('${fid}')",
                                 ValueCallback<String> {})
                         }
                     }
@@ -259,4 +355,3 @@ fun Activity.registerJsInterface(webView: WebView, name: String) {
         JsInterface.getInstance(), name
     )
 }
-

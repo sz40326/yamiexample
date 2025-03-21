@@ -107,7 +107,9 @@ class MainActivity : ComponentActivity() {
                 channel
             )
         }
+        JsInterface.initBackgroundCallBack()
     }
+
 
     override fun onDestroy() {
         webView.removeJavascriptInterface("JXApi")
