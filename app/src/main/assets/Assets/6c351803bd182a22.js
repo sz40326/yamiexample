@@ -16,10 +16,9 @@
 @cond emitCommand {"弹出提示"}
 
 
-@option emitCommandTapTap {"初始化","调用登录","调用更新"}
+@option emitCommandTapTap {"初始化","调用登录","调用更新","初始化成就","解锁成就"}
 @alias TapTap操作
 @cond emitCommand {"TapTap集成"}
-
 
 @string TapTap_clientId
 @alias Client ID
@@ -76,7 +75,6 @@
 @alias 成功登录事件
 @desc
 回调本地变量：accessToken、avatar、email、name、openId、unionId
-
 @cond emitCommandTapTap {'调用登录'}
 
 @file TapTapLogin_failure
@@ -93,7 +91,39 @@
 @file TapTapUpdate_cancel
 @filter event
 @alias 取消更新事件
+@desc 已上架的游戏，需确保更新资料版本中的 APK 包名和已上架的 APK 包名保持一致
 @cond emitCommandTapTap {'调用更新'}
+
+@file TapTapAchievement_success
+@filter event
+@alias 成就状态更新成功
+@desc
+回调本地变量：code、achievementId、achievementName、achievementType、currentSteps
+@cond emitCommandTapTap {'初始化成就'}
+
+@file TapTapAchievement_failure
+@filter event
+@alias 成就状态更新失败
+@desc
+回调本地变量：code、achievementId、currentSteps、errorMessage
+@cond emitCommandTapTap {'初始化成就'}
+
+
+@string TapTapAchievementUnlock_id
+@alias 成就ID
+@desc achievementId
+@cond emitCommandTapTap {'解锁成就'}
+
+@boolean TapTapAchievementUnlock_isStep
+@alias 分步
+@default false
+@desc 如果此成就是分步成就，请开启此选项，并填写下面的分步值
+@cond emitCommandTapTap {"解锁成就"}
+
+@number TapTapAchievementUnlock_stepValue
+@alias 分步值
+@desc 分步开启时有效
+@cond emitCommandTapTap {"解锁成就"}
 
 */
 /** 自定义指令脚本 */
@@ -115,6 +145,11 @@ export default class Mobile_AndroidApi {
     TapTapLogin_failure;
     TapTapLogin_cancel;
     TapTapUpdate_cancel;
+    TapTapAchievement_success;
+    TapTapAchievement_failure;
+    TapTapAchievementUnlock_id;
+    TapTapAchievementUnlock_isStep;
+    TapTapAchievementUnlock_stepValue;
     constructor() {
         this.contentString = "";
         this.emitCommand = "";
@@ -133,6 +168,11 @@ export default class Mobile_AndroidApi {
         this.TapTapLogin_failure = "";
         this.TapTapLogin_cancel = "";
         this.TapTapUpdate_cancel = "";
+        this.TapTapAchievement_success = "";
+        this.TapTapAchievement_failure = "";
+        this.TapTapAchievementUnlock_id = "";
+        this.TapTapAchievementUnlock_isStep = false;
+        this.TapTapAchievementUnlock_stepValue = 0;
     }
     checkEnv() {
         if (!window.JSApi) {
@@ -177,6 +217,16 @@ export default class Mobile_AndroidApi {
                         case "调用更新":
                             if (this.checkEnv())
                                 window.JSApi?.updateTapTap(this.TapTapUpdate_cancel);
+                            break;
+                        case "初始化成就":
+                            if (this.checkEnv())
+                                window.JSApi?.achievementInitTapTap(this.TapTapAchievement_success, this.TapTapAchievement_failure);
+                            break;
+                        case "解锁成就":
+                            if (this.checkEnv())
+                                window.JSApi?.achievementUnlockTapTap(this.TapTapAchievementUnlock_id, this.TapTapAchievementUnlock_isStep
+                                    ? this.TapTapAchievementUnlock_stepValue
+                                    : -1);
                             break;
                     }
                 }

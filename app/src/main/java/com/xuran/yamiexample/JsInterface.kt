@@ -5,6 +5,9 @@ import android.webkit.JavascriptInterface
 import android.webkit.ValueCallback
 import android.webkit.WebView
 import android.widget.Toast
+import com.taptap.sdk.achievement.TapAchievementCallback
+import com.taptap.sdk.achievement.TapTapAchievement
+import com.taptap.sdk.achievement.TapTapAchievementResult
 import com.taptap.sdk.achievement.options.TapTapAchievementOptions
 import com.taptap.sdk.compliance.option.TapTapComplianceOptions
 import com.taptap.sdk.core.TapTapLanguage
@@ -53,6 +56,56 @@ internal class JsInterface private constructor() {
     fun toast(str: String) {
         activityRef.get()?.let { activity ->
             Toast.makeText(getApplicationContext(), str, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    @JavascriptInterface
+    fun achievementUnlockTapTap(id: String, value: String) {
+        activityRef.get()?.let {
+            if (value.toInt() == -1) TapTapAchievement.unlock(id)
+            else {
+                TapTapAchievement.increment(achievementId = id, steps = value.toInt())
+            }
+        }
+    }
+
+    @JavascriptInterface
+    fun achievementInitTapTap(sid: String, fid: String) {
+        val webView = webViewRef.get()
+        activityRef.get()?.let {
+            if (webView == null || it == null) {
+                return
+            }
+            val callback = object : TapAchievementCallback {
+                override fun onAchievementSuccess(code: Int, result: TapTapAchievementResult?) {
+                    val code =
+                        """javascript:var list = new EventHandler(EventManager.guidMap['${sid}']);
+                            list.attributes['code'] = '${code}';
+                            list.attributes['achievementId'] = '${result?.achievementId}';
+                            list.attributes['achievementName'] = '${result?.achievementName}';
+                            list.attributes['achievementType'] = '${result?.achievementType}';
+                            list.attributes['currentSteps'] = '${result?.currentSteps}';
+                            EventHandler.call(list);"""
+
+                    webView.evaluateJavascript(code, ValueCallback<String> {})
+                }
+
+                override fun onAchievementFailure(
+                    achievementId: String, errorCode: Int, errorMessage: String
+                ) {
+                    val code =
+                        """javascript:var list = new EventHandler(EventManager.guidMap['${fid}']);
+                            list.attributes['code'] = '${errorCode}';
+                            list.attributes['achievementId'] = '${achievementId}';
+                            list.attributes['errorMessage'] = '${errorMessage}';
+                            EventHandler.call(list);"""
+
+                    webView.evaluateJavascript(code, ValueCallback<String> {})
+                }
+            }
+
+            TapTapAchievement.registerCallback(callback = callback)
+            TapTapAchievement.unregisterCallback(callback)
         }
     }
 
