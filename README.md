@@ -4,11 +4,13 @@ PS：可配合 [`移动端-安卓API`](https://github.com/xiaoxustudio/YaMiRPG_P
 
 # 使用
 
-1. clone 本项目使用`idea`打开
+1. clone 本项目使用`Android Studio`打开
 
 2. 将yami 编辑器 导出的`h5项目`复制到 `yamiexample/app/src/main/assets` 里面
 
 3. 然后就可以打包运行了
+
+PS：打包的详细教程可以看这个网站：[Android](https://docs.openwebgal.com/publish/android/)
 
 # 关于
 
