@@ -163,7 +163,7 @@ App没有销毁进入后台时调用
 
 declare global {
 	interface Window {
-		sdg4556?: {
+		JSApi?: {
 			/**
 			 * @description: 生命周期
 			 * @return {*}
@@ -285,7 +285,7 @@ export default class Mobile_AndroidApi implements Script<Command> {
 		this.TapTapAchievementUnlock_stepValue = 0;
 	}
 	checkEnv() {
-		if (!window.sdg4556) {
+		if (!window.JSApi) {
 			console.warn("当前环境不是徐然安卓壳，无法执行！");
 			return false;
 		}
@@ -295,7 +295,7 @@ export default class Mobile_AndroidApi implements Script<Command> {
 		switch (this.emitCommand) {
 			case "生命周期":
 				if (this.checkEnv())
-					window.sdg4556?.lifeCycle(
+					window.JSApi?.lifeCycle(
 						this.LifeCycle_created,
 						this.LifeCycle_activeDestroy,
 						this.LifeCycle_front,
@@ -303,14 +303,14 @@ export default class Mobile_AndroidApi implements Script<Command> {
 					);
 				break;
 			case "退出APP":
-				if (this.checkEnv()) window.sdg4556?.exitApp();
+				if (this.checkEnv()) window.JSApi?.exitApp();
 				break;
 			case "弹出提示":
-				if (this.checkEnv()) window.sdg4556?.toast(this.contentString);
+				if (this.checkEnv()) window.JSApi?.toast(this.contentString);
 				break;
 			case "弹出通知栏消息":
 				if (this.checkEnv())
-					window.sdg4556?.notifyApp(this.titleString, this.contentString);
+					window.JSApi?.notifyApp(this.titleString, this.contentString);
 				break;
 			case "TapTap集成":
 				if (!this.checkEnv()) return;
@@ -329,11 +329,11 @@ export default class Mobile_AndroidApi implements Script<Command> {
 								oaidCert: this.TapTap_oaidCert,
 								enableLog: this.TapTap_enableLog,
 							};
-							window.sdg4556?.initTapTap(JSON.stringify(config));
+							window.JSApi?.initTapTap(JSON.stringify(config));
 							break;
 						case "调用登录":
 							if (this.checkEnv())
-								window.sdg4556?.loginTapTap(
+								window.JSApi?.loginTapTap(
 									this.TapTapLogin_success,
 									this.TapTapLogin_failure,
 									this.TapTapLogin_cancel
@@ -341,18 +341,18 @@ export default class Mobile_AndroidApi implements Script<Command> {
 							break;
 						case "调用更新":
 							if (this.checkEnv())
-								window.sdg4556?.updateTapTap(this.TapTapUpdate_cancel);
+								window.JSApi?.updateTapTap(this.TapTapUpdate_cancel);
 							break;
 						case "初始化成就":
 							if (this.checkEnv())
-								window.sdg4556?.achievementInitTapTap(
+								window.JSApi?.achievementInitTapTap(
 									this.TapTapAchievement_success,
 									this.TapTapAchievement_failure
 								);
 							break;
 						case "解锁成就":
 							if (this.checkEnv())
-								window.sdg4556?.achievementUnlockTapTap(
+								window.JSApi?.achievementUnlockTapTap(
 									this.TapTapAchievementUnlock_id,
 									this.TapTapAchievementUnlock_isStep
 										? this.TapTapAchievementUnlock_stepValue
